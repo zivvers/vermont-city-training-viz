@@ -10,6 +10,7 @@
 <div id="svg">
 </div>
 <script src="js/d3.v4.min.js"></script>
+<script src="js/d3-queue.v3.min.js"></script>
 
 <script>
 
@@ -21,16 +22,23 @@ var margin = {top: 40, right: 20, bottom: 100, left: 60},
 var y = d3.scaleLinear()
           .range([height, 0]);
 
-var parseDate = d3.timeParse("%m-%d-%y");
+var parseDate = d3.timeParse("%m-%d-%Y");
 
 var formatWeekYear = d3.timeFormat("%U-%y");
+
+var formatDate = d3.timeFormat("%m-%d-%Y");
 
 var parseWeekYear = d3.timeParse("%U-%y");
 
 var formatWeek = d3.timeFormat("%U");
 
+var stack = d3.stack();
+
 var x = d3.scaleTime()
       .range([0, width]);
+
+// for our stacked aggregated graph
+var z = d3.scaleOrdinal(d3.schemeCategory20).domain("treadmill", "outside");
 
 var yAxis = d3.axisLeft(y)
     .ticks(10);
@@ -47,39 +55,59 @@ var weeklyMileage;
 
 var xAxis = d3.axisBottom(x);
 
-d3.tsv("training-mileage.tsv", function(error, dat) {
+var maxMileMap = {};
+
+d3.csv("training-mileage.csv", function(error, dat) {
   
   if (error) throw error;
 
+  var midWeekPrev = parseDate("01-01-1990"); //dummy date
 
-  dat.forEach(function(d) {
+
+  dat.forEach(function(d,i) {
+
 
       d.date = parseDate( d.date );
       d.mileage = +d.mileage;
       d.weekYear = formatWeekYear( d.date );
       d.weekDay = parseWeekYear(d.weekYear);
+      d.treadmillInd = +d.treadmill;
       d.midWeek = d3.timeDay.offset(d.weekDay, 3);
-      d.weekNum = 'week' + d.week;
+      d.midWeekPrevInd = midWeekPrev.valueOf() == d.midWeek.valueOf() ? 0 : 1;
+      midWeekPrev = d.midWeek;
+
+      if (! maxMileMap[d.midWeek]) {
+
+        maxMileMap[d.midWeek] = [d.mileage, d.date];
+
+      } else if (maxMileMap[d.midWeek][0] < d.mileage) {
+
+        console.log("comparing miles");
+
+        maxMileMap[d.midWeek] = [d.mileage, d.date];
+
+      }
+
 
     });
 
-
+    console.log( dat );
 
     weeklyMileage = d3.nest()
-      .key(function(d) { return d.weekNum; })
+      .key(function(d) { return d.midWeek; })
+      .key(function(d) { return d.treadmillInd; })
       .rollup( function(d) { 
                             return { 
-                                mileage: d3.sum(d, function(g) { return g.mileage; })
-                                , midWeek: d3.max(d, function(g) { return g.midWeek; })
-                                , weekNum: d3.max(d, function(g) { return g.weekNum; })
-                                //d3.max(d, function(g) { return g.weekNum; })
-                              };  })
+                                mileage: d3.sum(d, function(g) { return g.mileage }),
+                                date: d3.min(d, function(d) { return d.midWeek; }) };  })
       .entries(dat)
-      .map(function(d) { return { weekNum: d.key, mileage: d.value.mileage, date: d.value.midWeek }; });
+      .map(function(d) { return { date : d.key
+                                  , treadmill : d.values["1"] ? d.values["1"].value.mileage : 0
+                                  , outside : d.values["0"] ? d.values["0"].value.mileage : 0 }; });
 
-    var maxWeekNum = d3.max(function(d) { return d.weekNum });
+   
 
-    console.log(dat);
+    //console.log(dat);
     console.log( weeklyMileage );
 
     y.domain([0, d3.max(dat, function(d) { return d.mileage; })]);
@@ -98,7 +126,7 @@ d3.tsv("training-mileage.tsv", function(error, dat) {
     xAxis
       .tickValues( d3.timeSunday.range( d3.timeSunday.floor(d3.min(dat, function(d) { return d.date; })), 
                                       d3.max(dat, function(d) { return d.date; }) ) )
-                    //.map(function(d) { return d.date; }))
+      //.map(function(d) { return d.date; }))
       //.tickFormat( function(d,i) { if (i % 2 == 0) { return d3.timeFormat('%d %b')(d);  } } )
       //.ticks(d3.timeSunday.range, 1)
       //.tickFormat( d3.timeFormat('%d %b') )
@@ -113,12 +141,16 @@ d3.tsv("training-mileage.tsv", function(error, dat) {
 
     svg.selectAll("rect")
       .data(dat)
+
       .enter().append("rect")
       .attr("class", "bar")
       .attr("x", function(d) { return x(d.date); })
-      .attr("width", "10px")
+      .attr("width", "5px")
       .attr("y", function(d) { return y(d.mileage); })
-      .attr("height", function(d) { return height - y(d.mileage); });
+      .attr("height", function(d) { return height - y(d.mileage); })
+      .style("fill", function(d) { return d.treadmillInd == 1 ? "orange" : "steelblue" })
+      //.attr("midWeek", function(d) { return formatDate(d.midWeek); })
+      ;
 
       svg.append("g")
           .attr("class", "x axis")
@@ -142,52 +174,30 @@ d3.tsv("training-mileage.tsv", function(error, dat) {
 
 function update() {
 
-  y.domain([0, 35]);
+  
+  //y.domain([0, 35]);
+  y.domain([0, d3.max(weeklyMileage, function(d) { return d.outsideMileage + d.treadmillMileage; })]);
 
-  /*var x2 = d3.scaleBand()
-      .range([0, width])
-      .domain( weeklyMileage.map( function(d) { return d.weekNum; } ) );
-
-  xAxis2 = d3.axisBottom(x2);*/
-
-  /*var bars = svg.selectAll(".bar")
-              //.data([{ date : parseDate("02-13-19"), mileage : 30 }]);
-  bars
-    .enter()
-    .append('rect')
-    .attr('width', "15px")
-    .attr('height', 0)
-    .attr('y', height)
-    .merge(bars)
-    .transition()
-    .duration(1000)
-    .attr("height", function(d, i) {
-        return height - y(d.mileage);
-    })
-    .attr("y", function(d, i) {
-        return y(d.mileage);
-    })
-    .attr("width", "15px")
-    .attr("x", function(d) {
-        return x(d.midWeek);  });*/
-  //xAxis.tickFormat(function (d,) { if });
 
   console.log(weeklyMileage);
 
   console.log( d3.timeWednesday.ceil(d3.max(weeklyMileage, function(d) { return d.date; }) ) );
 
-  console.log( d3.timeWednesday.range( d3.timeWednesday.floor(d3.min(weeklyMileage, function(d) { return d.date; })), 
-                                      d3.timeWednesday.ceil(d3.max(weeklyMileage, function(d) { return d.date; })) ) );
+  console.log( d3.timeWednesday.range( d3.min( weeklyMileage, function(d) { return d.date; } )), 
+                                      d3.max( weeklyMileage, function(d) { return d.date; } ) );
 
   xAxis
-      .tickValues( d3.timeWednesday.range( d3.timeWednesday.floor(d3.min(weeklyMileage, function(d) { return d.date; })), 
+      .tickValues( d3.timeWednesday.range( d3.min(weeklyMileage, function(d) { return d.date; }), 
                                       d3.timeThursday.ceil(d3.max(weeklyMileage, function(d) { return d.date; })) ) )
-      .tickFormat( function(d) {return "Week " + (d3.timeWednesday.count(d3.timeWednesday.floor(d3.min(weeklyMileage, function(d) { return d.date; })), d ) + 1) });
 
-  var bars = svg.selectAll(".bar")
-            .data(weeklyMileage);
+      .tickFormat( function(d) { return "Week " + (d3.timeWednesday.count(d3.timeWednesday.floor(d3.min(weeklyMileage, function(d) { return d.date; })), d ) + 1) })
+      ;
 
-  svg.selectAll(".bar")
+  
+
+            
+
+  /*svg.selectAll(".bar")
     .enter()
     .append('rect')
     .merge( bars )
@@ -200,19 +210,59 @@ function update() {
         return y(d.mileage);
     })
     .attr("width", "10px")
-    .attr("x", function(d) { console.log(x(d.date));
-      return x(d.date);  }); 
+    .attr("x", function(d) { return x(d.date);  }); */
 
-  d3.selectAll("g.tick")
-    .data()
+  //d3.selectAll("g.tick")
+    //.data()
+
+  var bars = svg.selectAll(".bar");
 
   bars
-      .exit()
+    .transition()
+    .duration( 1000 )
+    .attr("x", function(d) { return x(d.date) });
+
+  
+  d3.selectAll(".ser")
+    .data(stack.keys(weeklyMileage.columns.slice(1))(weeklyMileage))
+    .enter().append("g")
+      .attr("class", "serie")
+      .attr("fill", function(d) { return z(d.key); })
+    .selectAll("rect")
+    .data(function(d) { return d; })
+    .enter().append("rect")
+      .attr("x", function(d) { return x(d.data.midWeek); })
+      .attr("y", function(d) { return y(d[1]); })
+      .attr("height", function(d) { return y(d[0]) - y(d[1]); })
+      .attr("width", x.bandwidth());
+
+  bars
+      .filter(function(d) { return d.date.valueOf() != maxMileMap[d.midWeek][1].valueOf(); })
       .transition()
+      .delay(1000)
+      .remove()
+      .on("end", function() { console.log("DONE: " + svg.selectAll(".bar").size());
+                              if ( svg.selectAll(".bar").size() == weeklyMileage.length) {
+
+                                transBars();
+                              }
+                            });
+
+  //bars.enter().append(
+/*  bars
+      .data(weeklyMileage)
+      .enter()
+      .append("rect")
+      .merge(bars)
+      .transition()
+      .delay(2000)
       .duration(1000)
-      .attr('height', 0)
-      .attr('y', height)
-      .remove();
+      .attr("height", function(d, i) {
+        return height - y(d.mileage);
+    })
+    .attr("y", function(d, i) {
+        return y(d.mileage);
+    }); */
 
   svg.select('.y.axis')
       .transition()
@@ -222,14 +272,37 @@ function update() {
   svg.select('.x.axis')
       .transition()
       .duration(1000)
-      .call(xAxis);
-/*
-  d3.select(".x.axis")
-    .selectAll("g.tick text")
-    .transition()
-    .duration(1000)
-    //.delay(10000)
-    .text(function(d,i) {return "week " + (i+1);}); */
+      .call(xAxis)
+    .selectAll("text")
+      //.attr("y", 0)
+      .attr("x", 4)
+      .attr("dy", ".35em")
+      .attr("transform", "rotate(45)")
+      .style("text-anchor", "start");
+
+/* */
+
+
+}
+
+function transBars() {
+
+  var bars = svg.selectAll(".bar");
+
+  bars
+        .data(weeklyMileage)
+        .enter()
+        .append("rect")
+        .merge(bars)
+        .transition()
+        //.delay(2000)
+        .duration(1000)
+        .attr("height", function(d, i) {
+          return height - y(d.mileage);
+      })
+      .attr("y", function(d, i) {
+          return y(d.mileage);
+      });
 
 
 }
