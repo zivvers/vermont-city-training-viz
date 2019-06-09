@@ -1,23 +1,38 @@
 <!DOCTYPE html>
 <meta charset="utf-8">
 <style>
-.bar { fill: steelblue; }
 
 
 </style>
 <body>
 <div id="buttons">
-<input type="button" id="weekView" value="Weekly Agg"/>
-<input type="button" id="dayView" value="Daily Agg"/>
-<input type="button" id="removeTreadmill" value="Filter Treadmill"/>
-<input type="button" id="removeOutside" value="Filter Outside"/>
+
+	<input type="button" id="weekView" value="Weekly Agg"/>
+	<input type="button" id="dayView" value="Daily Agg"/>
+
 </div>
+<div id="radio" checked="all">
+	<input type="radio" id="all" value="all">All<br>
+	<input type="radio" id="treadmill" value="treadmill">Treadmill<br>
+	<input type="radio" id="outside" value="outside">Outside<br>
+</div>
+
 <div id="svg">
 </div>
-<script src="js/d3.v4.min.js"></script>
-<script src="js/d3-queue.v3.min.js"></script>
+<!--script src="js/d3.v4.min.js"></script-->
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<!--script src="js/d3-queue.v3.min.js"></script-->
 
 <script>
+
+d3.select("#radio")
+	.select("#all")
+	.property("checked", true);
+
+d3.select("#radio")
+	.selectAll("input")
+	.on("click", function() { console.log("cliked radio");
+							  radioClick(d3.select(this)); })
 
 
 var margin = {top: 40, right: 20, bottom: 100, left: 100},
@@ -67,6 +82,8 @@ var maxMileMap = {};
 
 var dat;
 
+var totMileage;
+
 d3.csv("training-mileage.csv", function(error, data) {
   
   if (error) throw error;
@@ -101,6 +118,15 @@ d3.csv("training-mileage.csv", function(error, data) {
 
     });
 
+
+  	totMileage = d3.nest()
+  					.key(function(d) { return d.weekDay; })
+      //.key(function(d) { return d.treadmillInd; })
+      				.entries(dat);
+
+     console.log( totMileage );
+
+
     weeklyMileage = d3.nest()
       .key(function(d) { return d.midWeek; })
       .key(function(d) { return d.treadmillInd; })
@@ -113,16 +139,13 @@ d3.csv("training-mileage.csv", function(error, data) {
                                   , treadmill:  d.values.filter(function(d) { return d.key == 1; })[0] ? d.values.filter(function(d) { return d.key == 1; })[0].value.mileage : 0
                                   , outside:  d.values.filter(function(d) { return d.key == 0; })[0] ? d.values.filter(function(d) { return d.key == 0; })[0].value.mileage : 0 }}) ;
 
-    console.log( weeklyMileage );
+    //console.log( weeklyMileage );
 
     y.domain([0, d3.max(dat, function(d) { return d.mileage; })]);
 
     x.domain( [ d3.timeSunday.floor(d3.min(dat, function(d) { return d.date; })), d3.max(dat, function(d) { return d.date; }) ] ).nice();
 
-    //console.log( dat.filter(function(d) { console.log(d3.timeFormat("%A")(d.date)); return 1==1;//d3.timeFormat("%A")(d.date) in ["Monday", "Wednesday"] 
 
-    /* console.log( dat.filter(function(d) { return ( "Sunday" ==d3.timeFormat("%A")(d.date)) > -1 ) })
-                    .map(function(d) { return d.date; }) ) ; */
 
     console.log( d3.timeSunday.range( d3.timeSunday.floor(d3.min(dat, function(d) { return d.date; })), 
                                       d3.max(dat, function(d) { return d.date; }) ) );
@@ -136,19 +159,25 @@ d3.csv("training-mileage.csv", function(error, data) {
                       .map( function(d,i) { if ( i % 2 == 0 ) { return 6; } else {return 0; } })  );
 
  
-
-    g.selectAll("ser")
-      .data(stack.keys(["mileage"])(dat))
+    // notice nested data structure
+    g.selectAll(".ser")
+      //.data(stack.keys(["mileage"])(dat))
+      .data([totMileage])
       .enter().append("g")
-        .attr("class", "ser")
-    .selectAll("rect")
-    .data(function(d) { return d; })
-    .enter().append("rect")
-      .style("fill", function(d) { return z(d.data.insideOrOut); })
-      .attr("x", function(d) { return x(d.data.date); })
-      .attr("y", function(d) { return y(d[1]); })
-      .attr("height", function(d) { return y(d[0]) - y(d[1]); })
-      .attr("width", 5);
+        .attr("class", "ser") 
+      .selectAll("g")
+      .data(function(d) { console.log(d); return d; })
+      .enter().append("g")
+      	.attr("class", "weekG")
+      	.attr("week", function(d,i) { return i; })
+      .selectAll("rect")
+      .data(function(d) { console.log(d); return d.values; })
+        .enter().append("rect")
+        .attr("x", function(d) { return x(d.date); })
+        .attr("y", function(d) { return y(d.mileage); })
+        .attr("height", function(d) { return y(0)-y(d.mileage); })
+        .style("fill", function(d) { return z(d.insideOrOut); })
+        .attr("width", 5);
 
 
       g.append("g")
@@ -172,9 +201,46 @@ d3.csv("training-mileage.csv", function(error, data) {
           .style("text-anchor", "end")
           .text("Miles");
 
-      //svg.selectAll("g.tick:nth-child()")
 
   });
+
+function radioClick(clickedElem) {
+	console.log(clickedElem.attr("value"));
+	console.log(d3.select("#radio").select('input:checked').attr("value"));
+	//if click the already checked button, don't do anything
+	/*if (clickedElem.attr("value") == d3.select("#radio").select('input:checked').attr("value") ) {
+
+		console.log("NOTHING TO DO IN THIS TOWN");
+
+	} else {
+
+		d3.select("#radio").selectAll('input').property("checked", false);
+		var filterTo = clickedElem.attr("value");
+		clickedElem.property("checked", true);
+
+	}*/
+
+	d3.select("#radio").selectAll('input').property("checked", false);
+	clickedElem.property("checked", true);
+
+	// have to change stuff to respond!
+	if (d3.select("#radio").attr("checked") != clickedElem.attr("value")) {
+
+		d3.select("#radio").attr( "checked", clickedElem.attr("value") );
+
+
+	}
+
+
+
+
+
+}
+
+
+
+
+
 
 // change view back to original day view
 function dayView() {
@@ -187,47 +253,86 @@ function dayView() {
       .tickValues( d3.timeSunday.range( d3.timeSunday.floor(d3.min(dat, function(d) { return d.date; })), 
                                       d3.max(dat, function(d) { return d.date; }) ) );
 
+
     g.select("g#treadmill")
       .selectAll("rect")
       .transition()
       .duration(1000)
-      .attr("y", function(d) { return y(d[0]); })
-      .attr("height", function(d) { return 0; }) 
+      .attr("height", function(d) { return 0; })
+      .attr("y", function(d,i) { console.log(d); return y(d[0]); })
+      
+      .on("end", function(d,i) { d3.select(this).remove();
+      							 console.log(i);
+      							 if (i == (weeklyMileage.length-1)) {
+
+      							 	    /* g.select("g#outside")
+									    	.selectAll("rect.weekAgg")
+									    	.transition()
+									    	.duration(1000)
+									    	.attr("y", y(0))
+									    	.attr("height", 0)
+									    	.on("end", function(d,i) {
+									    		d3.select(this).remove();
+
+									    		if (i == (weeklyMileage.length-1)) { */
+
+									    			createDailyBars();
+
+									    		//}
+
+									    	//});
+
+      							 } }) ; 
       ;
 
+    y.domain([0, d3.max(dat, function(d) { return d.mileage; })]);
+
+    //g.select("g#treadmill")
+    //  .selectAll("rect")
+    //  .remove();
+
     var bars = svg.select("g#outside").selectAll("rect");
-
-    /* move make bars for all runs, but keep at Sunday until transition */
-    /*g.selectAll("ser")
-        .data(stack.keys(["mileage"])(dat))
-        .enter().append("g")
-          .attr("class", "ser")
-      .selectAll("rect")
-      .data(function(d) { return d; })
-      .enter().append("rect")
-        .style("fill", function(d) { return z(d.data.insideOrOut); })
-        .attr("x", function(d) { return x(d.data.date); })
-        .attr("y", function(d) { return y(d[1]); })
-        .attr("height", function(d) { return y(d[0]) - y(d[1]); })
-        .attr("width", 5); */
-
-    var gSer = svg.select(".ser"); 
+ 
     
+    /*
+		DELAY
+
     g.select("g#outside")
       .data(stack.keys(["mileage"])(dat))
       .enter().append("g")
         .merge(gSer)
         .attr("class", "ser")
-    .selectAll("rect")
+    .selectAll("rect.dayAgg")
     .data(function(d) { return d; })
     .enter().append("rect")
+      .attr("class", "dayAgg")
+      .style("fill", "purple")
+      .attr("class", "test")
       .attr("x", function(d) { return x( d.data.weekDay ); })
+      .attr("y", function(d) { return y(d[1]); })
+      .attr("height", function(d) { return y(d[0]) - y(d[1]); })
+      .attr("width", 5)
       .transition()
+      .duration(1000)
+      .attr("x", function(d) { return x(d.data.date); });
+
+
+	svg.select('.y.axis')
+	    .transition()
+	    .duration(1000)
+	    .call(yAxis);
+							*/
+	svg.select('.x.axis')
+      .transition()
+      .duration(1000)
+      .call(xAxis);
+
+      /*.transition()
       .style("fill", function(d) { return z(d.data.insideOrOut); })
       .attr("x", function(d) { return x(d.data.date); })
       .attr("y", function(d) { return y(d[1]); })
       .attr("height", function(d) { return y(d[0]) - y(d[1]); })
-      .attr("width", 5);
+      .attr("width", 5); */
 
 
     /* bars
@@ -277,11 +382,11 @@ function weekView() {
     //.select("rect")
     .transition()
     .duration( 1000 )
-    .attr("x", function(d) { return x(d.data.weekDay) })
+    .attr("x", function(d) { return x(d.weekDay) })
     .style("fill",  z("outside") );
 
   bars
-      .filter(function(d) { return d.data.date.valueOf() != maxMileMap[d.data.midWeek][1].valueOf(); })
+      .filter(function(d) { return d.date.valueOf() != maxMileMap[d.midWeek][1].valueOf(); })
       .transition()
       .delay(1000)
       .remove()
@@ -354,6 +459,7 @@ function transBars() {
     .merge(bars)
       .transition()
       .duration(1000)
+      .attr("class", "weekAgg")
       .attr("x", function(d) { return x(d.data.date); })
       .attr("y", function(d) { return y(d[1]); })
       .attr("height", function(d) { return y(d[0]) - y(d[1]); })
@@ -375,12 +481,114 @@ function transBars() {
       .attr("y", function(d) { return y(d[1]); })
       .attr("height", function(d) { return y(d[0]) - y(d[1]); }) 
       ;
-    
-    
-  
+
+}
+ 
+
+function createDailyBars() {
+
+    var gSer = svg.select(".ser") ;
+    		//bars = gSer.selectAll("rect");
+
+/*    g.selectAll(".ser")
+      //.data(stack.keys(["mileage"])(dat))
+      .data([totMileage])
+      .enter().append("g")
+        .attr("class", "ser") 
+      .selectAll("g")
+      .data(function(d) { console.log(d); return d; })
+      .enter().append("g")
+      	.attr("class", "weekG")
+      	.attr("week", function(d,i) { return i; })
+      .selectAll("rect")
+      .data(function(d) { console.log(d); return d.values; })
+        .enter().append("rect")
+        .attr("x", function(d) { return x(d.date); })
+        .attr("y", function(d) { return y(d.mileage); })
+        .attr("height", function(d) { return y(0)-y(d.mileage); })
+        .style("fill", function(d) { return z(d.insideOrOut); })
+        .attr("width", 5);
+*/
+	bars = g.selectAll("rect");
+
+    g.select("g#outside")
+      .selectAll("g.weekG")
+      .data(totMileage)
+      .enter().append("g")
+      .merge(d3.selectAll("g.weekG"))
+      	
+        //.merge(gSer) don't need to join cuz same length!
+        
+      .selectAll("rect")
+	  .data(function(d) { console.log(d.values); return d.values; })
+
+    	.enter().append("rect")
+    	.attr("y", function(d) { return y(d.mileage); })
+    	.attr("x", function(d) { return x( d.weekDay ); })
+    	.attr("height", function(d) { return y(0)-y(d.mileage); })
+    	.merge(bars)
+    	.attr("class", "update")
+    	.style("fill", z("outside"))
+    	.attr("y", function(d) { return y(d.mileage); })
+    	.attr("x", function(d) { return x( d.weekDay ); })
+    	.attr("height", function(d) { return y(0)-y(d.mileage); })
+    	.attr("width", 5)
+
+    	;
+
+	g.select("g#outside")
+		.selectAll("rect")
+        .transition()
+    	.duration(1000)
+    	.attr("x", function(d) { return x( d.date ); })
+    	.style("fill", function(d) { return z(d.insideOrOut); });
+
+
+
+//    bars.exit().remove();
+
+	/*d3.selectAll("rect").transition()
+    	.duration(1000)
+    	.attr("x", function(d) { return x( d.data.date ); }); */
+
+
+     /*bars.enter().append("rect")
+      .style("fill", "purple")
+      .attr("x", function(d) { return x( d.data.weekDay ); })
+      .attr("y", function(d) { return y(d[0]) })
+      .attr('width', 5)
+      .attr("height", function(d) { return y(d[0]) - y(d[1]); }); */
+
+   // bars.exit().remove(); 
+
+
+      //.attr("class", "NEWW_20");
+      
+      //.attr("height", function(d) { return 0;/*y(d[0]) - y(d[1]);*/ })
+    /*  .attr("width", 5)
+      .transition()
+      .duration(1000)
+      .attr("x", function(d) { return x(d.data.date); })
+      .attr("y", function(d) { return y(d[1]); })
+      .attr("height", function(d) { return y(d[0]) - y(d[1]); });
+	*/
+
+	svg.select('.y.axis')
+	    .transition()
+	    .duration(1000)
+	    .call(yAxis);
+						
+	svg.select('.x.axis')
+      .transition()
+      .duration(1000)
+      .call(xAxis);
 
 
 }
+
+
+    
+ 
 
 
   
