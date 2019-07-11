@@ -149,9 +149,9 @@ d3.csv("training-mileage.csv", function(error, data) {
                                 mileage: d3.sum(d, function(g) { return g.mileage }),
                                 date: d3.min(d, function(d) { return d.weekDay; }) };  })
       .entries(dat)
-      .map(function(d) { return { date : d.values[0].value.date 
+      .map(function(d) { return [{ date : d.values[0].value.date 
                                   , treadmill:  d.values.filter(function(d) { return d.key == 1; })[0] ? d.values.filter(function(d) { return d.key == 1; })[0].value.mileage : 0
-                                  , outside:  d.values.filter(function(d) { return d.key == 0; })[0] ? d.values.filter(function(d) { return d.key == 0; })[0].value.mileage : 0 }}) ;
+                                  , outside:  d.values.filter(function(d) { return d.key == 0; })[0] ? d.values.filter(function(d) { return d.key == 0; })[0].value.mileage : 0 }]; }) ;
 
     //console.log( weeklyMileage );
 
@@ -280,93 +280,39 @@ function dayView() {
       							 console.log(i);
       							 if (i == (weeklyMileage.length-1)) {
 
-      							 	    /* g.select("g#outside")
-									    	.selectAll("rect.weekAgg")
-									    	.transition()
-									    	.duration(1000)
-									    	.attr("y", y(0))
-									    	.attr("height", 0)
-									    	.on("end", function(d,i) {
-									    		d3.select(this).remove();
-
-									    		if (i == (weeklyMileage.length-1)) { */
-
-									    			createDailyBars();
-
-									    		//}
-
-									    	//});
+									    	createDailyBars();
 
       							 } }) ; 
       ;
 
     y.domain([0, d3.max(dat, function(d) { return d.mileage; })]);
 
-    //g.select("g#treadmill")
-    //  .selectAll("rect")
-    //  .remove();
-
     var bars = svg.select("g#outside").selectAll("rect");
  
-    /*
-		DELAY
-
-    g.select("g#outside")
-      .data(stack.keys(["mileage"])(dat))
-      .enter().append("g")
-        .merge(gSer)
-        .attr("class", "ser")
-    .selectAll("rect.dayAgg")
-    .data(function(d) { return d; })
-    .enter().append("rect")
-      .attr("class", "dayAgg")
-      .style("fill", "purple")
-      .attr("class", "test")
-      .attr("x", function(d) { return x( d.data.weekDay ); })
-      .attr("y", function(d) { return y(d[1]); })
-      .attr("height", function(d) { return y(d[0]) - y(d[1]); })
-      .attr("width", 5)
-      .transition()
-      .duration(1000)
-      .attr("x", function(d) { return x(d.data.date); });
-
-
-	svg.select('.y.axis')
-	    .transition()
-	    .duration(1000)
-	    .call(yAxis);
-							*/
 	svg.select('.x.axis')
       .transition()
       .duration(1000)
       .call(xAxis);
 
-
-
 }
 
+
 /* a function to remove either the treadmill or the outdoors when it is week aggregated */
-function removeBarTransitionWeek( filterOut /*'treadmill' or 'outside'*/, currAgg /* day or week */) {
+function removeBarTransitionWeek( filterOut /*'treadmill' or 'outside'*/) {
 
 	var keep = filterOut == 'treadmill' ? 'outside' : 'treadmill';
-	var gBars;
-	if (currAgg == 'day') {
+
+	if (filterOut == 'treadmill') {
 
 		gBars = d3.select("g#outside");
 
 	} else {
 
-		if (filterOut == 'treadmill') {
+		gBars = d3.select("g#treadmill");
 
-			gBars = d3.select("g#outside");
+	}
 
-		} else {
-
-			gBars = d3.select("g#treadmill");
-
-		}
-
-	} 
+	
 
 
     gBars
@@ -385,9 +331,9 @@ function removeBarTransitionWeek( filterOut /*'treadmill' or 'outside'*/, currAg
 
 // change view to week aggregated
 function weekView() {
-
-  y.domain([0, d3.max(weeklyMileage, function(d) { return d.outside + d.treadmill; })]);
-
+  console.log('Y EVEN TRY1: '+y(0))
+  y.domain([0, d3.max(weeklyMileage, function(d) { return d[0].outside + d[0].treadmill; })]);
+  console.log('Y EVEN TRY2: '+y(0));
   console.log('week transition');
   /*xAxis
       .tickValues( d3.timeWednesday.range( d3.min(weeklyMileage, function(d) { return d.date; }), 
@@ -434,28 +380,7 @@ function weekView() {
     .text( function(d,i) { return "Week " + (i+1); } ) ;
     //.attr("transform", function(i) { return "translate(" })
 
-  /* old way of axis transition...would re-rotate labels :-( */
-  /*svg.select('.x.axis')
-    .selectAll("text")
-    .style("fill", "none");
-
-  svg.select('.x.axis')
-      .transition()
-      .duration(900)
-      .call(xAxis)
-    .selectAll("text")
-      .attr("x", 4)
-      .attr("dy", ".35em")
-      .attr("transform", "rotate(45)")
-      .style("text-anchor", "start") 
-      ;
-  svg.select('.x.axis')
-      .selectAll("text")
-      .transition()
-      .delay(1000)
-      .duration(100)
-      .style("fill", "black"); */
-
+ 
 }
 
 function transBars() {
@@ -464,13 +389,12 @@ function transBars() {
     , bars = gType.selectAll("g.type rect");
 
   var weekG = g.selectAll("g.week")
-    //.data( stack.keys( ["outside","treadmill"] )(weeklyMileage) )
     .data( weeklyMileage )
     .enter().append("g")
     .merge( d3.selectAll("g.week") );
 
   weekG.selectAll("g.type")
-      .data( function(d) { return stack.keys( ["outside","treadmill"] )([d]); } )
+      .data( function(d) { return stack.keys( ["outside","treadmill"] )(d); } )
       .enter().append("g")
       .merge( d3.selectAll("g.type") )
       .attr("class", "type")
@@ -478,33 +402,39 @@ function transBars() {
       //.style("fill", function(d) { return z(d.key); })
       ;
 
-  console.log('here');
-  g.selectAll("g#outside") 
-  	.select("rect")
-  	//.data(function(d) { return d; })
-  	//.enter().append("rect")
-  	//.merge(bars)
-  	.transition()
+  var outsideRect = g.selectAll("g#outside") 
+  	.selectAll("rect")
+  	.data(function(d) { return d; })
+  	/*.enter().append("rect")
+  	.merge( d3.selectAll("g#outside rect") )*/;
+
+  outsideRect.transition()
     .duration(1000)
-    .attr("x", function(d) { return x(d[0].data.date); })
-    .attr("y", function(d) { return y(d[0][1]); })
-    .attr("height", function(d) { return y(d[0][0]) - y(d[0][1]); })
-    //.style("fill", function(d) { console.log(d.key); return z(d.key); })
-    ;
- 
-  g.selectAll("g#treadmill")
-      .select("rect")
-      .attr("x", function(d) { return x(d[0].data.date); })
-      .attr("y", function(d) { return y(d[0][0]); })
+    .attr("x", function(d) { return x(d.data.date); })
+    .attr("y", function(d) { return y(d[1]); })
+    .attr("height", function(d) { return y(d[0]) - y(d[1]); })
+    ; 
+
+  var treadmillRect = g.selectAll("g#treadmill")
+  	  .selectAll("rect")
+  	  .data(function(d) { return d; })
+  	  //.enter().append("rect")
+  	  //.merge( d3.selectAll("g#treadmill rect") )
+
+  treadmillRect.exit().remove();
+
+  treadmillRect
+  	  .attr("x", function(d) { console.log( d.data.date ); return x(d.data.date); })
+      .attr("y", function(d) { console.log( d[1] ); return y(d[0]); })
       .attr("height", 0) 
       .transition()
       .delay(1000)
       .duration(1000)
-      .attr("y", function(d) { return y(d[0][1]); })
-      .attr("height", function(d) { return y(d[0][0]) - y(d[0][1]); }) 
-      //.attr("fill", function(d) { console.log(d.key); return z(d.key); });
+      .attr("y", function(d) { return y(d[1]); })
+      .attr("height", function(d) { return y(d[0]) - y(d[1]); })
       ;
-	
+     
+    
 }
  
 
@@ -541,38 +471,8 @@ function createDailyBars() {
         .transition()
     	.duration(1000)
     	.attr("x", function(d) { return x( d.date ); })
-    	//.style("fill", function(d) { return z(d.insideOrOut); })
     	;
 
-
-
-//    bars.exit().remove();
-
-	/*d3.selectAll("rect").transition()
-    	.duration(1000)
-    	.attr("x", function(d) { return x( d.data.date ); }); */
-
-
-     /*bars.enter().append("rect")
-      .style("fill", "purple")
-      .attr("x", function(d) { return x( d.data.weekDay ); })
-      .attr("y", function(d) { return y(d[0]) })
-      .attr('width', 5)
-      .attr("height", function(d) { return y(d[0]) - y(d[1]); }); */
-
-   // bars.exit().remove(); 
-
-
-      //.attr("class", "NEWW_20");
-      
-      //.attr("height", function(d) { return 0;/*y(d[0]) - y(d[1]);*/ })
-    /*  .attr("width", 5)
-      .transition()
-      .duration(1000)
-      .attr("x", function(d) { return x(d.data.date); })
-      .attr("y", function(d) { return y(d[1]); })
-      .attr("height", function(d) { return y(d[0]) - y(d[1]); });
-	*/
 
 	svg.select('.y.axis')
 	    .transition()
