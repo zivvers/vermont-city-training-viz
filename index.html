@@ -10,10 +10,10 @@
 	<input type="button" id="dayView" value="Daily Agg"/>
 
 </div>
-<div id="radio" checked="all">
-	<input type="radio" id="all" value="all">All<br>
-	<input type="radio" id="treadmill" value="treadmill">Treadmill<br>
-	<input type="radio" id="outside" value="outside">Outside<br>
+<div id="radio">
+	<input type="radio" name="runType" id="all" value="all">All<br>
+	<input type="radio" name="runType" id="treadmill" value="treadmill">Treadmill<br>
+	<input type="radio" name="runType" id="outside" value="outside">Outside<br>
 </div>
 
 <div id="svg">
@@ -221,33 +221,53 @@ d3.csv("training-mileage.csv", function(error, data) {
 
 function radioClick(clickedElem) {
 
-	//console.log(clickedElem.attr("value"));
-	//console.log(d3.select("#radio").select('input:checked').attr("value"));
-	//if click the already checked button, don't do anything
-	/*if (clickedElem.attr("value") == d3.select("#radio").select('input:checked').attr("value") ) {
+	console.log(clickedElem.attr("value"));
+	
+	var currCheck = clickedElem.attr("value");
 
-		console.log("NOTHING TO DO IN THIS TOWN");
+	if (d3.select("#radio").attr("prev_check") == currCheck) {
+
+		console.log('NO CHANGE');
 
 	} else {
 
-		d3.select("#radio").selectAll('input').property("checked", false);
-		var filterTo = clickedElem.attr("value");
-		clickedElem.property("checked", true);
+		if ( currCheck == "all" ) {
 
-	}*/
+			g.selectAll("g.type rect") 
+		  	  .transition()
+		      .duration(1000)
+		      .attr("x", function(d) { return x(d.data.date); })
+		      .attr("y", function(d) { return y(d[1]); })
+		      .attr( "height", function(d) { return y(d[0]) - y(d[1]) } );
 
-	d3.select("#radio").selectAll('input').property("checked", false);
-	clickedElem.property("checked", true);
+		} else {
 
-	// have to change stuff to respond!
-	if (d3.select("#radio").attr("checked") != clickedElem.attr("value")) {
+		  var filterOut = currCheck == "outside" ? "treadmill" : "outside";
 
-		d3.select("#radio").attr( "checked", clickedElem.attr("value") );
+		  g.selectAll("g#"+currCheck+" rect") 
+		  	.transition()
+		    .duration(1000)
+		    .attr("x", function(d) { return x(d.data.date); })
+		    .attr("y", function(d) { return y(0) - ( y(d[0]) - y(d[1]) ); })
+		    .attr("height", function(d) { return  y(d[0]) - y(d[1]) ; })
+		    ; 
+
+		  g.selectAll("g#"+filterOut+" rect") 
+		  	.transition()
+		    .duration(1000)
+		    .attr("x", function(d) { return x(d.data.date); })
+		    .attr("y", function(d) { return y(0) ; })
+		    .attr("height", 0)
+		    ; 
 
 
-		// removeBarTransitionWeek(clickedElem.attr("value"), 
+
+		}
 
 	}
+
+
+	d3.select("#radio").attr("prev_check", clickedElem.attr("value"));
 
 
 }
@@ -298,9 +318,16 @@ function dayView() {
 
 
 /* a function to remove either the treadmill or the outdoors when it is week aggregated */
-function removeBarTransitionWeek( filterOut /*'treadmill' or 'outside'*/) {
+function removeBarTransition( filterOut /*'treadmill' or 'outside'*/) {
 
 	var keep = filterOut == 'treadmill' ? 'outside' : 'treadmill';
+
+	d3.selectAll('g#'+filterOut+' rect')
+		.transition()
+		.duration(1000)
+		.attr('height', 0);
+
+
 
 	if (filterOut == 'treadmill') {
 
@@ -311,8 +338,6 @@ function removeBarTransitionWeek( filterOut /*'treadmill' or 'outside'*/) {
 		gBars = d3.select("g#treadmill");
 
 	}
-
-	
 
 
     gBars
@@ -335,12 +360,7 @@ function weekView() {
   y.domain([0, d3.max(weeklyMileage, function(d) { return d[0].outside + d[0].treadmill; })]);
   console.log('Y EVEN TRY2: '+y(0));
   console.log('week transition');
-  /*xAxis
-      .tickValues( d3.timeWednesday.range( d3.min(weeklyMileage, function(d) { return d.date; }), 
-                                      d3.timeThursday.ceil(d3.max(weeklyMileage, function(d) { return d.date; })) ) )
-
-      .tickFormat( function(d) { return "Week " + (d3.timeWednesday.count(d3.timeWednesday.floor(d3.min(weeklyMileage, function(d) { return d.date; })), d ) + 1) })
-      ; */
+  
 
   var bars = svg.selectAll("g.type").selectAll("rect");
 
@@ -405,8 +425,7 @@ function transBars() {
   var outsideRect = g.selectAll("g#outside") 
   	.selectAll("rect")
   	.data(function(d) { return d; })
-  	/*.enter().append("rect")
-  	.merge( d3.selectAll("g#outside rect") )*/;
+  	;
 
   outsideRect.transition()
     .duration(1000)
