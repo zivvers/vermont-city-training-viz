@@ -30,8 +30,11 @@ d3.select("#radio")
 
 d3.select("#radio")
 	.selectAll("input")
-	.on("click", function() { //console.log("cliked radio");
-							  radioClick(d3.select(this)); })
+	.on("click", function() { radioClick(d3.select(this)); })
+
+d3.select("input#weekView").on("click", function() { weekView();});
+
+d3.select("input#dayView").on("click", function() { dayView();});
 
 
 var margin = {top: 40, right: 20, bottom: 100, left: 100},
@@ -65,10 +68,6 @@ var yAxis = d3.axisLeft(y)
 var svg = d3.select("div#svg").append("svg")
     .attr("width", width + margin.left + margin.right)
     .attr("height", height + margin.top + margin.bottom);
-
-d3.select("input#weekView").on("click", function() { weekView();});
-
-d3.select("input#dayView").on("click", function() { dayView();});
 
 var weeklyMileage;
 
@@ -120,8 +119,6 @@ d3.csv("training-mileage.csv", function(error, data) {
 
   	totMileage = d3.nest()
   					.key(function(d) { return d.weekDay; })
-  					//.key(function(d) { return d.insideOrOut; })
-      //.key(function(d) { return d.treadmillInd; })
       				.entries(dat)
       				.map(function(d) { console.log(d);
       									var tempArr = [];
@@ -220,14 +217,12 @@ d3.csv("training-mileage.csv", function(error, data) {
   });
 
 function radioClick(clickedElem) {
-
-	console.log(clickedElem.attr("value"));
 	
 	var currCheck = clickedElem.attr("value");
 
 	if (d3.select("#radio").attr("prev_check") == currCheck) {
 
-		console.log('NO CHANGE');
+		// don't do anything
 
 	} else {
 
@@ -260,24 +255,18 @@ function radioClick(clickedElem) {
 		    .attr("height", 0)
 		    ; 
 
-
-
 		}
 
 	}
 
-
+	// update what our last click was
 	d3.select("#radio").attr("prev_check", clickedElem.attr("value"));
 
 
 }
 
 
-
-
-
-
-// change view back to original day view
+// change chart to day aggregated
 function dayView() {
 
     //y.domain([0, d3.max(dat, function(d) { return d.mileage; })]);
@@ -288,19 +277,19 @@ function dayView() {
       .tickValues( d3.timeSunday.range( d3.timeSunday.floor(d3.min(dat, function(d) { return d.date; })), 
                                       d3.max(dat, function(d) { return d.date; }) ) );
 
-
-    g.select("g#treadmill")
-      .selectAll("rect")
+    /* remove stacked treadmill bars */
+    g.selectAll("g#treadmill rect")
       .transition()
       .duration(1000)
       .attr("height", function(d) { return 0; })
-      .attr("y", function(d,i) { /*console.log(d);*/ return y(d[0]); })
+      .attr("y", function(d,i) { return y(d[0]); })
       
       .on("end", function(d,i) { d3.select(this).remove();
       							 console.log(i);
       							 if (i == (weeklyMileage.length-1)) {
-
-									    	createDailyBars();
+      							 			console.log("next step");
+									    	//createDailyBars();
+									    	dayViewHelper();
 
       							 } }) ; 
       ;
@@ -317,36 +306,44 @@ function dayView() {
 }
 
 
-/* a function to remove either the treadmill or the outdoors when it is week aggregated */
-function removeBarTransition( filterOut /*'treadmill' or 'outside'*/) {
+function dayViewHelper() {
 
-	var keep = filterOut == 'treadmill' ? 'outside' : 'treadmill';
+    var gWeek = g.selectAll("g.week")
+      .data(totMileage)
+      .enter().append("g")
+      .merge( d3.selectAll("g.week") )
+        .attr("class", "week") 
+        .attr("week", function(d,i) { return i; });
 
-	d3.selectAll('g#'+filterOut+' rect')
-		.transition()
-		.duration(1000)
-		.attr('height', 0);
-
-
-
-	if (filterOut == 'treadmill') {
-
-		gBars = d3.select("g#outside");
-
-	} else {
-
-		gBars = d3.select("g#treadmill");
-
-	}
-
-
-    gBars
+    gWeek.selectAll("g.type")
+      .data(function(d) { return stack.keys(["outside", "treadmill"])(d); })
+      .enter().append("g")
+      .merge( gWeek.selectAll("g.type") )
+      .attr("class", "type")
+      .attr("id", function(d) { return d.key; } )
+      .style("fill", function(d) { return z(d.key); })
       .selectAll("rect")
+      .data( function(d) { return d; } )
+      .enter().append("rect")
+      .merge( d3.selectAll("g.type rect") )
+        .attr("x", function(d) { console.log("RECT: "+d.data.date); return x(d.data.weekDay); })
+        .attr("y", function(d) { return y(d[1]); })
+        .attr("height", function(d) { return y(d[0]) - y(d[1]); })
+        .attr("width", 5)
       .transition()
-      .duration(1000)	
-      .attr("y", function(d) { return y(d[1]); } )
-      .attr("height", function(d) { return y(d[1]); } )
-      .on("end", function() { d3.select(this).remove(); })
+      .duration(1000)
+      .attr("x", function(d) { return x(d.data.date); });
+
+
+	svg.select('.y.axis')
+	    .transition()
+	    .duration(1000)
+	    .call(yAxis);
+						
+	svg.select('.x.axis')
+      .transition()
+      .duration(1000)
+      .call(xAxis);
 
 
 }
@@ -354,17 +351,16 @@ function removeBarTransition( filterOut /*'treadmill' or 'outside'*/) {
 
 
 
-// change view to week aggregated
+
+
+// change chart to week aggregated
 function weekView() {
-  console.log('Y EVEN TRY1: '+y(0))
-  y.domain([0, d3.max(weeklyMileage, function(d) { return d[0].outside + d[0].treadmill; })]);
-  console.log('Y EVEN TRY2: '+y(0));
-  console.log('week transition');
   
+  y.domain([0, d3.max(weeklyMileage, function(d) { return d[0].outside + d[0].treadmill; })]);
 
   var bars = svg.selectAll("g.type").selectAll("rect");
 
-  /* move bars to wednesday position of each week */
+  /* move bars to Sunday position of each week */
   bars
     .transition()
     .duration( 1000 )
@@ -373,18 +369,17 @@ function weekView() {
     ;
 
   bars
-      .filter(function(d) { //console.log(d.data.midWeek);
+      .filter(function(d) { /* only keep max bar per week */
       						return d.data.date.valueOf() != maxMileMap[d.data.midWeek][1].valueOf(); })
       .transition()
       .delay(1000)
       .remove()
-      .on("end", function() { console.log('# rects: '+( 2*d3.selectAll("g.type rect").size() ) );
+      .on("end", function() { 
+      						 /* don't want to join in weekly data until have shrunk to weekly bars! */
+      						 if ( d3.selectAll("g.type rect").size() == 2*weeklyMileage.length) {
+                                                  
+                              weekViewHelper();
 
-      						if ( d3.selectAll("g.type rect").size() == 2*weeklyMileage.length) {
-                              
-                              console.log("removal complete");
-                              
-                              transBars();
                             } }) ; 
 
   svg.select('.y.axis')
@@ -403,7 +398,7 @@ function weekView() {
  
 }
 
-function transBars() {
+function weekViewHelper() {
 
   var gType = svg.select("g.type")//.selectAll("rect");
     , bars = gType.selectAll("g.type rect");
@@ -457,62 +452,5 @@ function transBars() {
 }
  
 
-function createDailyBars() {
-
-    var gSer = svg.select(".ser") ;
-    		//bars = gSer.selectAll("rect");
-
-	bars = g.selectAll("rect");
-
-    g.select("g#outside")
-      .selectAll("g.weekG")
-      .data(totMileage)
-      .enter().append("g")
-      .merge(d3.selectAll("g.weekG"))
-      .selectAll("rect")
-	  .data(function(d) { return d.values; })
-
-    	.enter().append("rect")
-    	.attr("y", function(d) { return y(d.mileage); })
-    	.attr("x", function(d) { return x( d.weekDay ); })
-    	.attr("height", function(d) { return y(0)-y(d.mileage); })
-    	.merge(bars)
-    	.attr("class", "update")
-    	//.style("fill", z("outside"))
-    	.attr("y", function(d) { return y(d.mileage); })
-    	.attr("x", function(d) { return x( d.weekDay ); })
-    	.attr("height", function(d) { return y(0)-y(d.mileage); })
-    	.attr("width", 5)
-    	;
-
-	g.select("g#outside")
-		.selectAll("rect")
-        .transition()
-    	.duration(1000)
-    	.attr("x", function(d) { return x( d.date ); })
-    	;
-
-
-	svg.select('.y.axis')
-	    .transition()
-	    .duration(1000)
-	    .call(yAxis);
-						
-	svg.select('.x.axis')
-      .transition()
-      .duration(1000)
-      .call(xAxis);
-
-
-}
-
-
     
- 
-
-
-  
-
-
-
 </script>
